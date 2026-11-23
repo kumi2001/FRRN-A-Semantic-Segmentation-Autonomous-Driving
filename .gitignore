@@ -1,0 +1,35 @@
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Local datasets and training artifacts; keep lightweight authorized examples separately
+data/
+cityscape/
+cityscapes/
+checkpoints/
+*.ckpt*
+*.index
+*.data-*-of-*
+*.meta
+*.h5
+*.hdf5
+*.tflite
+*.pb
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Training logs and exports should be reviewed before publication
+training_runs/
+wandb/
+mlruns/
