@@ -1,0 +1,33 @@
+name: Reconstructed segmentation smoke test
+
+on:
+  push:
+    paths:
+      - "reconstruction/**"
+      - ".github/workflows/reconstruction-ci.yml"
+  pull_request:
+    paths:
+      - "reconstruction/**"
+      - ".github/workflows/reconstruction-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  cpu-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: reconstruction/requirements.txt
+      - name: Install reconstruction requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r reconstruction/requirements.txt
+      - name: Train, infer, and test on synthetic images
+        working-directory: reconstruction
+        run: bash run_smoke.sh
