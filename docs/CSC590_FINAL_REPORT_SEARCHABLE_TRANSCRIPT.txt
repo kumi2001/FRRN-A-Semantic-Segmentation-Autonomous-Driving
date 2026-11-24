@@ -1,0 +1,2030 @@
+TRANSCRIPT OF ORIGINAL AUTHOR'S CSC 590 REPORT (2026)
+This is a searchable text extraction of the submitted 41-page PDF, preserving page order. It is NOT an independent replication of the historical model. PDF layout, graphics and licensed urban-scene images are not reproduced. For exact figures and layout, see the original report.
+
+
+
+================ PAGE 1 of 41 ================
+
+CALIFORNIA STATE UNIVERSITY, DOMINGUEZ HILLS
+             College of Natural and Behavioral Sciences
+                  Department of Computer Science
+
+
+
+     Teaching Autonomous Vehicles to See the Road:
+     Pixel-Level Scene Understanding with FRRN-A
+   Semantic Segmentation for Safer Autonomous Driving Perception
+
+
+
+                          A Project Report
+   Submitted in Partial Fulfillment of the Requirements for CSC 590
+
+
+
+                                 By
+                          Kumar Abhinav
+
+
+                       Instructor: Dr. Bin Tang
+
+
+                            May 17, 2026
+
+
+================ PAGE 2 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                  ABSTRACT
+
+         Autonomous driving systems require perception methods that understand the entire driving scene rather
+
+than isolated objects alone. Traditional object detection can localize vehicles and pedestrians with bounding boxes,
+
+but it does not show the exact spatial extent of drivable road, sidewalks, buildings, boundaries, obstacles, or
+
+vulnerable road users. This project investigates semantic segmentation as a pixel-level perception technique for
+
+urban driving scenes. The work focuses on FRRN-A, a Full-Resolution Residual Network architecture designed to
+
+preserve spatial detail while also learning deep contextual information. Using a Cityscapes/Darmstadt-style urban
+
+driving subset, the project adapts legacy TensorFlow segmentation code, resolves compatibility issues in a current
+
+Paperspace GPU environment, trains the model for 100 epochs, saves checkpoints, and generates prediction masks
+
+for qualitative evaluation. The report presents the motivation for pixel-level understanding, background on
+
+segmentation models, dataset preparation, FRRN-A architecture, implementation decisions, evaluation observations,
+
+and future work. The evaluation combines training-loss analysis, checkpoint verification, prediction-mask
+
+inspection, and a limited proxy foreground/background alignment analysis on visualized validation examples. The
+
+results show that the implementation successfully produces meaningful segmentation masks for large scene regions
+
+and road-user groups, while also revealing limitations around small objects, distant pedestrians, boundary detail, and
+
+the absence of full benchmark metrics such as mean intersection-over-union. Overall, the project demonstrates a
+
+complete engineering pipeline for adapting and training an FRRN-A semantic segmentation model for autonomous
+
+driving scene understanding, and it identifies clear steps toward more rigorous quantitative validation and real-time
+
+road-video deployment.
+
+
+
+
+                                                                  2
+
+
+================ PAGE 3 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                     ACKNOWLEDGMENTS
+
+        I would like to thank Dr. Bin Tang for guidance, project feedback, and emphasis on presenting a
+
+technically honest final project. I also thank California State University, Dominguez Hills, and the CSC 590 course
+
+environment for providing the opportunity to explore semantic segmentation, autonomous driving perception, and
+
+practical deep learning implementation. The project also benefited from the CEDARS/SENAI learning resources
+
+and from the availability of cloud GPU experimentation through Paperspace Gradient.
+
+
+
+
+                                                                  3
+
+
+================ PAGE 4 of 41 ================
+
+                                    Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                        TABLE OF CONTENTS
+
+Abstract..........................................................................................................................................................................2
+Acknowledgments......................................................................................................................................................... 3
+List of Figures................................................................................................................................................................5
+List of Tables................................................................................................................................................................. 6
+Chapter 1. Introduction..................................................................................................................................................7
+Chapter 2. Motivation and Significance...................................................................................................................... 10
+Chapter 3. Related Work and Techniques................................................................................................................... 12
+Chapter 4. Dataset........................................................................................................................................................15
+Chapter 5. Techniques and Implementation................................................................................................................ 17
+Chapter 6. Evaluation and Analysis.............................................................................................................................22
+Chapter 7. Conclusion and Future Work..................................................................................................................... 28
+References....................................................................................................................................................................30
+Appendix A. GitHub Repository and Demo Recording..............................................................................................31
+Appendix B. Repository Structure and Execution Commands...................................................................................32
+Appendix C. Additional Results and Visual Evidence................................................................................................34
+Appendix D. Engineering Notes and Reproducibility Limitations.............................................................................36
+Appendix E. Quantitative Evaluation Notes................................................................................................................37
+Appendix F. Demo Recording Outline and Submission Checklist.............................................................................39
+Appendix G. Reproducibility Audit and Artifact Checklist........................................................................................40
+
+
+
+
+                                                                                                4
+
+
+================ PAGE 5 of 41 ================
+
+                               Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                      LIST OF FIGURES
+
+Figure 1. GitHub repository and README page....................................................................................................... 17
+Figure 2. Training script and Paperspace environment...............................................................................................20
+Figure 3. FRRN-A training loss over 100 epochs....................................................................................................... 23
+Figure 4. Input, ground truth, and FRRN-A prediction example................................................................................ 24
+Figure 5. Prediction example with road-like and vehicle regions............................................................................... 24
+Figure 6. Visualization-level proxy mask alignment scores........................................................................................25
+Figure 7. Standalone prediction mask with vehicle/person regions............................................................................ 34
+Figure 8. Standalone prediction mask with pedestrian/object regions........................................................................ 34
+Figure 9. Sparse small-object prediction example.......................................................................................................35
+
+
+
+
+                                                                                  5
+
+
+================ PAGE 6 of 41 ================
+
+                                 Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                          LIST OF TABLES
+
+Table 1. Comparison of computer vision tasks relevant to autonomous driving........................................................11
+Table 2. Conceptual comparison between segmentation architectures.......................................................................13
+Table 3. Local dataset organization used for the project............................................................................................. 15
+Table 4. Compatibility issues and implementation fixes.............................................................................................18
+Table 5. Training configuration used in the final experiment.....................................................................................20
+Table 6. Evaluation evidence used in the report..........................................................................................................22
+Table 7. Training behavior summary...........................................................................................................................23
+Table 8. Qualitative analysis of selected prediction outputs....................................................................................... 24
+Table 9. Visualization-level proxy foreground/background check.............................................................................25
+Table 10. Error sources and likely causes................................................................................................................... 26
+Table 11. Recommended official metrics for future evaluation.................................................................................. 38
+Table 12. Screen recording outline..............................................................................................................................39
+Table 13. Final artifact verification checklist.............................................................................................................. 41
+
+
+
+
+                                                                                       6
+
+
+================ PAGE 7 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                               CHAPTER 1
+                                             INTRODUCTION
+
+1.1 Project Context
+
+         Autonomous vehicles depend on perception systems that can transform camera streams and sensor
+
+information into structured scene understanding. A driving scene contains multiple kinds of information: the
+
+drivable road surface, sidewalks, lanes, vehicles, pedestrians, traffic signs, buildings, sky, background objects, and
+
+temporary obstacles. A safe driving system must recognize these elements and understand their spatial relationships.
+
+In many introductory computer vision systems, the perception task is framed as classification or object detection.
+
+Classification assigns a single label to an image, while object detection finds rectangular boxes around important
+
+objects. These tasks are useful, but they are not sufficient for all driving decisions because the exact boundary
+
+between road and non-road regions can matter as much as the presence of an object.
+
+         Semantic segmentation addresses this limitation by assigning a class label to every pixel in an image.
+
+Instead of saying only that an image contains a car or drawing a bounding box around a pedestrian, semantic
+
+segmentation can mark which pixels correspond to road, vehicle, pedestrian, sidewalk, sky, building, or other scene
+
+classes. This dense prediction approach is especially relevant to autonomous driving, where a vehicle must reason
+
+about spatial boundaries and the usable road surface. A segmentation mask can be treated as a scene map that is
+
+more detailed than a collection of object boxes.
+
+         My project, titled Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with
+
+FRRN-A, explores semantic segmentation for autonomous driving perception. The technical focus is FRRN-A, a
+
+Full-Resolution Residual Network designed to preserve full-resolution spatial details while still learning deep
+
+contextual information. The project adapts and trains an FRRN-A implementation on a Cityscapes/Darmstadt-style
+
+urban driving subset, generates model checkpoints, and produces prediction masks for analysis.
+
+
+1.2 Research Problem
+
+         The central problem addressed in this project is the gap between object-level perception and pixel-level
+
+driving-scene understanding. Object detection is useful for identifying that a pedestrian or vehicle exists, but it does
+
+not indicate the precise boundary of the object or the exact shape of the drivable road. For a vehicle operating in a
+
+
+
+                                                                   7
+
+
+================ PAGE 8 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+complex environment, these spatial boundaries can influence path planning, obstacle avoidance, and scene
+
+interpretation.
+
+         The research question guiding the project is: How can a Full-Resolution Residual Network be implemented
+
+and trained to produce pixel-level semantic segmentation outputs for urban driving scenes, and what strengths and
+
+limitations appear when the resulting masks are analyzed qualitatively and with basic proxy metrics?
+
+         I do not present this project as a state-of-the-art benchmark against all modern segmentation systems.
+
+Instead, it is an implementation and analysis project that demonstrates the engineering process of adapting a legacy
+
+model, training it in a cloud GPU environment, producing segmentation outputs, and evaluating the output behavior
+
+honestly.
+
+
+1.3 Objectives and Contributions
+
+         I designed the project objectives to cover both machine learning concepts and practical implementation
+
+skills. The most important objectives were to understand semantic segmentation, use an urban driving dataset,
+
+implement FRRN-A training, resolve TensorFlow compatibility issues, generate model checkpoints, visualize
+
+predictions, and analyze the results in a graduate-level report.
+
+         Prepared a Cityscapes/Darmstadt-style dataset structure with input images and pixel-level ground-truth
+
+masks.
+
+         Adapted a TensorFlow-based FRRN-A implementation to run in a current Paperspace Gradient GPU
+
+environment.
+
+         Resolved practical compatibility issues, including deprecated TensorFlow contrib components, tf_slim
+
+migration, compatibility-mode execution, and batch-normalization behavior.
+
+         Trained the FRRN-A model for 100 epochs using 320 x 640 crops and batch size 1.
+
+         Saved checkpoint files and used the trained model to generate segmentation prediction masks.
+
+         Analyzed training behavior, loss spikes, qualitative outputs, and a limited proxy foreground/background
+
+alignment measurement on visualized validation examples.
+
+         Documented GitHub instructions and created a demonstration recording for reproducibility and final
+
+submission.
+
+
+
+
+                                                                   8
+
+
+================ PAGE 9 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+1.4 Scope and Limitations
+
+        I scoped the project as a course-based implementation study rather than a production autonomous driving
+
+system. It focuses on one architecture, FRRN-A, and a limited Cityscapes/Darmstadt subset. The model is trained
+
+and evaluated offline; it is not deployed in real time on a vehicle. The primary evaluation is qualitative, with
+
+supplementary training-loss analysis and proxy mask-alignment measurements. Standard benchmark metrics such as
+
+mean intersection-over-union, per-class IoU, and full validation-set pixel accuracy are identified as future work
+
+because the colorized prediction outputs and ground-truth masks were not maintained in a fully standardized
+
+benchmark label format throughout the reporting pipeline.
+
+        This limitation is important to state clearly. The project demonstrates that the pipeline works and that
+
+meaningful prediction masks can be produced, but it does not claim state-of-the-art accuracy. The value of the work
+
+is in implementation, debugging, training, checkpoint generation, visualization, and honest analysis of the output
+
+behavior.
+
+
+
+
+                                                                  9
+
+
+================ PAGE 10 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                CHAPTER 2
+                        MOTIVATION AND SIGNIFICANCE
+
+2.1 Why Pixel-Level Understanding Matters
+
+         A self-driving car must understand not only what objects exist, but also where they occupy space in relation
+
+to the road. A bounding box around a pedestrian can be helpful, yet it includes background pixels and does not show
+
+the exact shape of the pedestrian. A box around a car may not distinguish the vehicle body from the road behind it.
+
+A road region cannot be described accurately by one rectangle because roads curve, lanes narrow, sidewalks
+
+intersect, and obstacles appear along boundaries.
+
+         Pixel-level semantic segmentation directly addresses these issues. In a segmentation mask, every pixel
+
+receives a predicted class. For road-scene understanding, this means that the output can represent drivable road,
+
+sidewalks, vehicles, pedestrians, building surfaces, sky, vegetation, and other background regions. This dense scene
+
+representation can support downstream modules that need more detail than object boxes provide.
+
+         The motivation is especially strong in safety-critical scenarios. If a vehicle misinterprets the edge of a
+
+sidewalk, misses a narrow pedestrian region, or fails to distinguish road from background, the planning system can
+
+be affected. Pixel-level segmentation is not required for every decision, but it provides valuable structure when
+
+boundaries matter. The tradeoff is that segmentation is computationally heavier than classification or object
+
+detection, which is why model design and input resolution are important.
+
+
+2.2 Audience and Practical Significance
+
+         The project has practical significance for students and practitioners who want to understand how deep
+
+learning perception systems are built beyond high-level demonstrations. A common misconception is that deep
+
+learning projects are mainly about choosing a model and running a training command. In practice, much of the work
+
+involves dataset organization, environment configuration, legacy-code adaptation, dependency management, GPU
+
+memory constraints, checkpoint handling, and result interpretation.
+
+         My work highlights that engineering process. The original FRRN-A code was not immediately compatible
+
+with the current environment. The model required TensorFlow compatibility mode, replacement of deprecated
+
+modules, and modifications to batch normalization. These implementation details are significant because real
+
+
+
+                                                                  10
+
+
+================ PAGE 11 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+machine learning work often requires adapting research code rather than starting from a clean tutorial
+
+implementation.
+
+         The significance for autonomous driving is that semantic segmentation can convert camera images into
+
+interpretable scene maps. A future vehicle system could process live camera frames, produce segmentation masks,
+
+and provide those masks to planning or control modules. This project is a prototype-stage demonstration of that
+
+perception component.
+
+
+2.3 Differences from Traditional Object Detection
+
+         A key message of the project is that semantic segmentation is not simply another name for detection.
+
+Detection usually returns bounding boxes and class labels. Segmentation returns a dense map. Table 1 summarizes
+
+the difference between related perception tasks.
+
+                    Table 1. Comparison of computer vision tasks relevant to autonomous driving.
+ Task                            Typical output                   Driving-scene example            Limitation or use
+
+                                                                                                   Too general; does not locate
+ Image classification            One label for whole image        Urban road scene
+                                                                                                   objects
+
+                                                                                                   Shows location but not exact
+ Object detection                Bounding boxes                   Box around car or pedestrian
+                                                                                                   shape or road boundary
+
+                                                                  Road pixels as road; vehicle     Dense scene understanding;
+ Semantic segmentation           Class label for every pixel
+                                                                  pixels as vehicle                focus of this project
+
+                                 Pixel mask for each object                                        Useful for object separation
+ Instance segmentation                                            Car 1, car 2, person 1
+                                 instance                                                          but more complex
+
+                                 Semantic plus instance
+ Panoptic segmentation                                            Road area plus individual cars Advanced future direction
+                                 segmentation
+
+
+
+         The table shows why semantic segmentation is a natural fit for the project goal. It provides a detailed
+
+output while remaining simpler than full panoptic segmentation. For a course project focused on FRRN-A, semantic
+
+segmentation gives a clear and meaningful target.
+
+
+
+
+                                                                     11
+
+
+================ PAGE 12 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                 CHAPTER 3
+                        RELATED WORK AND TECHNIQUES
+
+3.1 Semantic Segmentation Background
+
+         Semantic segmentation has been a major computer vision task for scene understanding. The goal is to
+
+predict a class label for each pixel in an image. Unlike classification, semantic segmentation requires the model to
+
+preserve spatial structure. Unlike object detection, semantic segmentation does not stop at rectangular object
+
+locations. It produces a dense prediction map with the same spatial structure as the input image.
+
+         Fully Convolutional Networks introduced the idea of adapting classification networks into dense prediction
+
+systems by replacing fully connected layers with convolutional operations and using upsampling to return
+
+predictions to image resolution (Long, Shelhamer, & Darrell, 2015). This idea influenced many segmentation
+
+architectures. Encoder-decoder networks such as U-Net and SegNet became important because they compress
+
+spatial information and then recover resolution through decoding or upsampling stages (Ronneberger, Fischer, &
+
+Brox, 2015; Badrinarayanan, Kendall, & Cipolla, 2017).
+
+         Modern segmentation architectures often balance local detail and global context. Local detail is required for
+
+boundaries and small objects. Global context is required to understand larger scene structure. Autonomous driving
+
+segmentation needs both because road surfaces are large continuous regions while pedestrians and traffic objects can
+
+be small and sparse.
+
+
+3.2 Residual Learning
+
+         Residual learning was introduced to make deep neural networks easier to train. Instead of forcing a network
+
+block to learn an entire transformation directly, a residual block learns a residual update and adds it to the input
+
+representation. This helps gradients flow through deep networks and reduces degradation problems in very deep
+
+architectures (He, Zhang, Ren, & Sun, 2016).
+
+         Residual connections are relevant to FRRN-A because the architecture uses residual units and full-
+
+resolution residual units. The intent is to preserve useful information while allowing the network to learn deeper
+
+features. In segmentation, residual connections can support training stability when the model must combine low-
+
+level spatial details with high-level context.
+
+
+
+                                                                   12
+
+
+================ PAGE 13 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+3.3 Full-Resolution Residual Networks
+
+         Full-Resolution Residual Networks were proposed for semantic segmentation in street scenes. The key
+
+design choice is maintaining a full-resolution stream throughout the network while also using a pooling stream that
+
+learns contextual features at lower spatial resolutions (Pohlen et al., 2017). This design is different from a simple
+
+encoder-decoder model that compresses the input and later reconstructs an output. FRRN maintains a stream that
+
+preserves fine spatial information, which can be useful for boundaries and dense pixel prediction.
+
+         FRRN-A is a smaller version of the FRRN family. In this project, FRRN-A was chosen because it offers a
+
+meaningful architecture for road-scene segmentation while remaining feasible for a course-scale implementation on
+
+available GPU resources. The architecture includes initial convolution layers, residual units, downsampling stages,
+
+full-resolution residual blocks, upsampling stages, feature fusion, and final pixel-wise prediction.
+
+
+3.4 Cityscapes and Urban Scene Understanding
+
+         The Cityscapes dataset is a widely used benchmark for urban street-scene understanding. It provides
+
+images from cities with pixel-level semantic annotations for road, sidewalk, building, vegetation, vehicles, persons,
+
+and other classes (Cordts et al., 2016). The Darmstadt subset used in this project provides urban driving scenes
+
+suitable for training and evaluation examples. Cityscapes-style data is relevant because it resembles the types of
+
+environments autonomous vehicles must interpret.
+
+         In this project, the available Darmstadt data was used as a course-scale subset rather than as a full official
+
+benchmark split. This matters for interpretation. Results should be understood as evidence that the implementation
+
+works and produces meaningful masks, not as official Cityscapes benchmark scores.
+
+
+3.5 Comparison with Common Segmentation Models
+
+         Several architectures are commonly discussed for semantic segmentation. U-Net is known for skip
+
+connections and strong performance in data-limited segmentation tasks. SegNet uses an encoder-decoder structure
+
+and pooling indices for upsampling. DeepLab models use atrous convolution and spatial pyramid pooling to capture
+
+multi-scale context (Chen et al., 2018). FRRN-A differs by explicitly maintaining a full-resolution residual stream
+
+through the network. Table 2 summarizes the comparison.
+
+                      Table 2. Conceptual comparison between segmentation architectures.
+
+
+
+
+                                                                   13
+
+
+================ PAGE 14 of 41 ================
+
+          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+Model            Design emphasis                  Strength                         Relation to this project
+
+                 Fully convolutional dense        Foundation for semantic          Related background
+FCN
+                 prediction                       segmentation                     technique
+
+                 Encoder-decoder with skip        Strong boundary recovery in
+U-Net                                                                              Future baseline comparison
+                 connections                      many domains
+
+                 Encoder-decoder with
+SegNet                                            Efficient decoding approach      Future baseline comparison
+                 pooling-index upsampling
+
+                 Atrous convolution and           Strong modern segmentation       Future benchmark
+DeepLab
+                 multi-scale context              baseline                         comparison
+
+                 Full-resolution residual         Preserves spatial detail while   Primary architecture
+FRRN-A
+                 stream plus pooled context       learning context                 implemented
+
+
+
+
+                                                     14
+
+
+================ PAGE 15 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                    CHAPTER 4
+                                                     DATASET
+
+4.1 Dataset Source
+
+          The dataset used in the project is a Cityscapes/Darmstadt-style urban driving subset. Darmstadt refers to
+
+one of the city subsets associated with Cityscapes-style street-scene data. The data contains RGB input images and
+
+corresponding pixel-level ground-truth segmentation masks. Each input image represents an urban driving scene,
+
+and each mask encodes class labels for pixels in the scene.
+
+          I used the available course/project data rather than downloading the full official Cityscapes benchmark. The
+
+working directory included paired images and labels for training and validation. During the project setup, the images
+
+were organized into folders such as cityscape/train, cityscape/train_labels, cityscape/val, and cityscape/val_labels.
+
+
+4.2 Concrete Data Counts and Split
+
+          A concrete count of the local working subset is important for interpreting the results. The prepared project
+
+directory contained 85 paired training images and labels and 15 paired validation images and labels. The validation
+
+examples were used to generate qualitative prediction masks. The split should be interpreted as a course-project
+
+subset prepared for experimentation, not as the full official Cityscapes benchmark split.
+
+                               Table 3. Local dataset organization used for the project.
+ Folder                          Content                          Count used in report             Purpose
+
+ cityscape/train                 RGB driving-scene images         85 image files                   Training input
+
+ cityscape/train_labels          Ground-truth masks               85 label files                   Training labels
+
+ cityscape/val                   RGB validation images            15 image files                   Qualitative evaluation input
+
+ cityscape/val_labels            Validation masks                 15 label files                   Ground-truth comparison
+
+ results_visuals                 Generated prediction masks       5 visual examples                Report and demo output
+
+
+
+
+4.3 Image Shape and Label Representation
+
+          The raw input image is represented as H x W x 3, where H is image height, W is image width, and 3
+
+represents the red, green, and blue channels of an RGB image. Each pixel in the input image has three color intensity
+
+
+
+
+                                                                     15
+
+
+================ PAGE 16 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+values. The semantic segmentation output is conceptually H x W x C, where C is the number of predicted classes or
+
+class scores. After selecting the highest class score for each pixel, the output becomes an H x W label mask.
+
+         For this project, the training script used 320 x 640 crops. This size was chosen because segmentation is
+
+memory intensive. A full segmentation sample includes both an image and a pixel-level mask. With a model
+
+containing about 17.7 million trainable parameters, the input size and batch size had to be selected within the limits
+
+of available GPU memory.
+
+
+4.4 Data Limitations
+
+         The dataset size is one of the most important limitations of the project. A small training subset can produce
+
+noisy loss curves and can limit generalization. The model may learn visible patterns in the training data, but a larger
+
+and more diverse split would be required to make stronger claims about performance across cities, lighting
+
+conditions, weather, and camera viewpoints. This limitation also motivates future work on larger Cityscapes training
+
+and formal benchmark metrics.
+
+
+
+
+                                                                   16
+
+
+================ PAGE 17 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                              CHAPTER 5
+                    TECHNIQUES AND IMPLEMENTATION
+
+5.1 System Overview
+
+         The implementation pipeline began with dataset preparation, continued through environment setup and
+
+TensorFlow compatibility work, and ended with training, checkpoint generation, and prediction-mask visualization.
+
+The workflow can be summarized as: dataset organization, environment restoration, FRRN-A model execution,
+
+checkpoint saving, prediction generation, and results analysis. This pipeline is shown in the project presentation and
+
+is documented in the GitHub repository.
+
+
+
+
+       Figure 1. GitHub repository page containing the project code, README, and uploaded deliverables.
+
+5.2 Environment and Framework
+
+         The model was trained in a Paperspace Gradient GPU environment. The original project code was based on
+
+older TensorFlow conventions, while the available environment used a newer Python and TensorFlow setup. This
+
+mismatch created the main engineering challenge of the project. Instead of rewriting the model in a new framework,
+
+the project focused on adapting the existing TensorFlow implementation so that it could run successfully.
+
+         TensorFlow was used because the provided semantic segmentation resources and FRRN-A implementation
+
+were TensorFlow-based. Maintaining TensorFlow allowed the project to work directly with the original architecture
+
+
+
+                                                                  17
+
+
+================ PAGE 18 of 41 ================
+
+                         Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+and demonstrate practical machine learning engineering: dependency management, compatibility fixes, execution
+
+scripts, GPU training, and checkpoint restoration.
+
+
+5.3 TensorFlow Compatibility Work
+
+         The original code used TensorFlow 1.x-style components, including tensorflow.contrib.slim. TensorFlow
+
+2.x no longer supports tensorflow.contrib, so this required migration. The implementation replaced deprecated
+
+contrib slim usage with tf_slim, used tensorflow.compat.v1 as tf, disabled v2 behavior where needed, and modified
+
+batch normalization calls. These changes allowed the code to build the graph, train the network, and save
+
+checkpoints in the available environment.
+
+                               Table 4. Compatibility issues and implementation fixes.
+ Issue                          Cause                            Fix applied                      Impact
+
+                                TensorFlow 2.x removed           Replaced contrib slim with       Allowed model imports to
+ tensorflow.contrib missing
+                                contrib module                   tf_slim                          succeed
+
+ TensorFlow 1.x graph           Legacy code expected             Used tensorflow.compat.v1        Restored graph-style
+ behavior                       graph/session workflow           and disabled v2 behavior         execution
+
+                                                                 Changed batch normalization
+                                tf_slim batch normalization                                       Allowed model construction
+ Batch normalization errors                                      calls to compatible
+                                dependency mismatch                                               and training
+                                                                 TensorFlow layers
+
+                                Environment used Python          Updated scripts to use           Allowed training script
+ python3.8 command missing
+                                3.11 path                        python3                          execution
+
+                                Model needed saved state for     Verified checkpoint files after Enabled prediction-mask
+ Checkpoint handling
+                                prediction                       training                        generation
+
+
+
+
+5.4 FRRN-A Architecture
+
+         FRRN-A is the central technical model used in my project. FRRN-A stands for Full-Resolution Residual
+
+Network-A, and its purpose is to support dense semantic segmentation while preserving spatial detail. This is
+
+important in autonomous driving because the model must identify not only what objects exist in a scene, but also
+
+where their boundaries occur at the pixel level.
+
+         The architecture can be understood as a two-stream network. The full-resolution stream preserves high-
+
+resolution spatial information throughout the model, while the pooling stream learns deeper contextual features
+
+through downsampling. This design helps the model combine fine local boundaries with broader scene context,
+
+which is useful for understanding road regions, vehicles, pedestrians, sidewalks, buildings, sky, and background.
+
+
+
+
+                                                                    18
+
+
+================ PAGE 19 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+         The implementation begins with an initial convolution stage followed by local residual units. A residual
+
+unit applies convolutional transformations, batch normalization, and nonlinear activation while supporting stable
+
+information flow through residual learning. Residual connections are useful because they reduce the difficulty of
+
+training deeper networks and help preserve information that might otherwise be weakened through many
+
+convolutional layers.
+
+         The full-resolution residual unit is the most distinctive part of FRRN-A. In this unit, information from the
+
+pooling stream is combined with a downsampled form of the full-resolution stream. The combined representation is
+
+processed by convolutional layers, and then a 1 x 1 convolution and upsampling step project information back into
+
+the full-resolution stream. This allows the network to learn semantic meaning while still retaining location-sensitive
+
+boundary information.
+
+         The downsampling path increases the receptive field so the network can recognize larger scene context,
+
+such as road layout and building-background structure. The upsampling path restores spatial resolution and prepares
+
+the network for pixel-wise classification. The final output is a segmentation map with shape H x W x C, where H
+
+and W represent the output height and width and C represents the number of scene classes predicted for each pixel.
+
+         This model selection fits the goal of the project because the project is not limited to recognizing that a
+
+vehicle or pedestrian is present. The goal is to produce a pixel-level interpretation of the driving scene. In that sense,
+
+FRRN-A is technically different from a simple classification model or a bounding-box detector. It produces a dense
+
+scene mask that can represent road surfaces, object regions, and other urban-driving components in a spatially
+
+detailed way.
+
+         My implementation work focused on making this architecture run successfully in the available
+
+environment. I adapted the TensorFlow-based FRRN-A code, resolved compatibility issues, trained the network for
+
+100 epochs, saved checkpoints, and generated prediction masks from validation images. This makes the technical
+
+contribution both architectural and practical: the report documents how the FRRN-A design was used and how the
+
+legacy implementation was made executable for the final project.
+
+
+
+
+                                                                   19
+
+
+================ PAGE 20 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+Figure 2. Training script and Paperspace project environment showing FRRN-A, 100 epochs, batch size 1, and 320
+                                              x 640 crop settings.
+
+5.5 Training Configuration
+
+          The final training configuration used FRRN-A with 320 x 640 image crops, batch size 1, 100 epochs, and
+
+checkpoint saving. The model had approximately 17,747,620 trainable parameters. Batch size 1 was selected
+
+because semantic segmentation is memory intensive: each sample includes an input image and a dense pixel-level
+
+label mask. Increasing the batch size would increase memory usage significantly.
+
+                          Table 5. Training configuration used in the final experiment.
+Parameter                                Value                                       Reason
+
+                                                                                     Primary full-resolution residual
+Architecture                             FRRN-A
+                                                                                     segmentation model
+
+                                                                                     Urban driving scenes with pixel-level
+Dataset                                  Cityscapes/Darmstadt subset
+                                                                                     masks
+
+Input crop                               320 x 640                                   Practical memory/scene-detail balance
+
+Batch size                               1                                           Required by GPU memory constraints
+
+                                                                                     Long enough to observe learning while
+Epochs                                   100
+                                                                                     feasible on available GPU time
+
+Trainable parameters                     17,747,620                                  Model capacity for dense scene learning
+
+Output                                   Checkpoint + prediction masks               Supports inference and visual evaluation
+
+
+
+
+                                                                  20
+
+
+================ PAGE 21 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+5.6 Why 100 Epochs Were Used
+
+         The choice of 100 epochs was a practical experimental decision. Fewer epochs would not provide enough
+
+training history to observe the learning behavior of FRRN-A, while much longer training could increase the risk of
+
+overfitting the small subset and require more GPU time. With 100 epochs, the model had enough opportunity to
+
+learn visible segmentation structure, save checkpoints, and generate prediction masks, while remaining feasible in
+
+the available environment.
+
+
+5.7 Prediction Generation
+
+         After training, checkpoint files were saved in the project directory. A custom prediction script was used to
+
+load the trained checkpoint and generate segmentation masks from validation images. The generated masks were
+
+saved in the results_visuals folder and were later copied into the GitHub repository under results/prediction_masks.
+
+The colors in the masks are visualization colors for predicted labels, not the original RGB colors of the input images.
+
+
+
+
+                                                                   21
+
+
+================ PAGE 22 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                      CHAPTER 6
+                                EVALUATION AND ANALYSIS
+
+6.1 Evaluation Strategy
+
+         Evaluation is the most important limitation and improvement area of the project. The project does not claim
+
+official Cityscapes benchmark performance because full mIoU and per-class IoU evaluation were not completed.
+
+However, the final report strengthens the evaluation by documenting multiple forms of evidence: training
+
+completion, checkpoint generation, training-loss behavior, qualitative input/ground-truth/prediction comparisons,
+
+prediction-mask coverage, and a limited proxy foreground/background alignment analysis on the visualized
+
+validation examples.
+
+                                    Table 6. Evaluation evidence used in the report.
+ Evidence type                   What it shows                    Strength                         Limitation
+
+                                 Loss values across 100                                            Noisy due to small dataset
+ Training logs                                                    Shows learning behavior
+                                 epochs                                                            and batch size 1
+
+                                                                  Shows training produced
+ Checkpoint files                Saved trained model state                                         Does not measure accuracy
+                                                                  reusable model files
+
+                                                                  Shows qualitative learning of    Colorized masks are not full
+ Prediction masks                Visual segmentation outputs
+                                                                  scene regions                    benchmark metrics
+
+                                 Input, ground truth,
+ Comparison figures                                               Supports error analysis          Limited number of examples
+                                 prediction side by side
+
+                                 Foreground/background
+                                                                                                   Not equivalent to official
+ Proxy binary alignment          agreement on visualized          Adds quantitative check
+                                                                                                   mIoU
+                                 examples
+
+
+
+
+6.2 Training Loss Behavior
+
+         The training loss curve shows that the model learned over time but did not train with a perfectly smooth
+
+loss. The spikes are expected because the dataset subset was small and the batch size was 1. With batch size 1, each
+
+gradient update depends on a single image. If that image contains difficult object boundaries, small pedestrians,
+
+unusual lighting, or class imbalance, the loss can temporarily increase. The important observation is that the model
+
+recovers after spikes and the overall trend remains lower in the later epochs than in the early stage.
+
+
+
+
+                                                                     22
+
+
+================ PAGE 23 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+  Figure 3. FRRN-A training loss over 100 epochs. The graph shows noisy spikes but an overall decreasing trend.
+
+         The loss curve should be interpreted as training behavior evidence rather than the only or best result. The
+
+strongest result is the complete pipeline: compatibility fixes, successful training, checkpoint generation, prediction-
+
+mask output, and qualitative analysis. The loss graph supports the claim that training was active and that the model
+
+did not simply fail or diverge.
+
+                                          Table 7. Training behavior summary.
+ Observation                                                      Interpretation
+
+ 100 epochs completed                                             The model trained through the planned experiment length
+
+ Loss spikes present                                              Small dataset and batch size 1 created noisy updates
+
+                                                                  Spikes are interpreted as training noise rather than model
+ Loss recovered after spikes
+                                                                  failure
+
+ Later values generally lower than early values                   The model learned meaningful patterns over time
+
+ Checkpoint saved                                                 Training produced reusable model state for prediction
+
+
+
+
+                                                                     23
+
+
+================ PAGE 24 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+6.3 Qualitative Prediction Analysis
+
+         Qualitative evaluation compares the original input image, the ground-truth segmentation mask, and the
+
+FRRN-A prediction. This type of analysis is common when full benchmark metrics are not yet available. It allows
+
+visual inspection of what the model learned and where it failed.
+
+
+
+
+   Figure 4. Qualitative comparison showing input image, ground truth, and FRRN-A prediction for a validation
+                                     example with pedestrians and a vehicle.
+
+
+
+
+   Figure 5. Qualitative comparison showing large road-like region and vehicle structures in the predicted mask.
+
+         The visual examples show that the model learned several major scene structures. Large regions such as
+
+road-like surfaces and background are visible. Vehicles and pedestrian groups are also detected in the prediction
+
+masks. At the same time, the results reveal limitations. Thin boundaries, distant persons, and small objects are
+
+difficult. Some masks are over-smoothed or color-shifted, and the model sometimes represents only the most
+
+dominant region in a scene.
+
+                           Table 8. Qualitative analysis of selected prediction outputs.
+ Example                                 Observed strength                           Observed weakness
+
+                                         Large road-like area and vehicle shapes     Fine road boundaries and small distant
+ Road/vehicle scene
+                                         appear in prediction                        objects are imperfect
+
+                                                                                     Small persons and object edges are not
+ Pedestrian scene                        Pedestrian group regions appear in mask
+                                                                                     consistently separated
+
+                                         Prediction shows limited activations for    Large background dominance can
+ Sparse street scene
+                                         small objects                               suppress smaller classes
+
+                                         Vehicle-like and person-like regions are    Class color mapping is for visualization,
+ Vehicle/person mask
+                                         visible                                     not official label scoring
+
+
+
+
+                                                                  24
+
+
+================ PAGE 25 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+6.4 Limited Proxy Visualization Check
+
+         To add a limited quantitative check without claiming official benchmark accuracy, three visualized
+
+comparison outputs were collapsed into a binary foreground/background representation. In each ground-truth and
+
+prediction panel, the dominant background color was treated as background and all other label colors were treated as
+
+foreground. The binary masks were then compared using foreground IoU and binary foreground/background pixel
+
+agreement. This metric mainly measures broad foreground/background consistency in the colorized visualization
+
+outputs; it is not a true semantic segmentation accuracy score and should not be interpreted as official Cityscapes
+
+mIoU, per-class IoU, or proof that the model is benchmark-superior.
+
+       Table 9. Visualization-level proxy foreground/background check, not official segmentation accuracy.
+
+                        Ground-truth              Prediction                                           Binary pixel
+Visual example                                                              Proxy foreground IoU
+                        foreground coverage       foreground coverage                                  agreement
+
+comparison_0            16.32%                    16.33%                    0.938                      0.990
+
+comparison_2            4.60%                     4.55%                     0.960                      0.998
+
+comparison_4            55.19%                    55.31%                    0.989                      0.994
+
+Mean                    25.37%                    25.40%                    0.962                      0.994
+
+
+
+
+               Figure 6. Visualization-level proxy mask alignment scores on three selected examples.
+
+         The proxy scores indicate that the selected visualized predictions have reasonable broad
+
+foreground/background consistency after simplifying the masks. This result is useful as a reproducible sanity check,
+
+
+
+                                                                  25
+
+
+================ PAGE 26 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+but it is intentionally limited. The values can appear high because the calculation collapses all semantic classes into
+
+only two groups and compares visualization colors rather than raw model logits or official label IDs. For this reason,
+
+the proxy analysis is reported as supporting evidence only. The stronger claims of the report remain the completed
+
+implementation, successful training, checkpoint generation, prediction-mask output, and qualitative interpretation.
+
+Official mIoU, pixel accuracy, and per-class IoU remain necessary future work.
+
+
+6.5 Comparison with Object Detection
+
+         Compared with object detection, the project output provides a denser representation of the driving scene.
+
+Object detection would produce boxes around vehicles or pedestrians. The FRRN-A output instead produces a pixel-
+
+level scene mask. This is more informative for understanding road boundaries, object shapes, and spatial coverage.
+
+The project therefore improves the form of perception output relative to object boxes, even though it does not yet
+
+prove superior benchmark accuracy over all segmentation models.
+
+
+6.6 Error Analysis
+
+         The most visible errors appear around small objects, distant pedestrians, and thin boundaries. These errors
+
+are consistent with the project constraints. The dataset subset was small, batch size was 1, and the model was trained
+
+under limited course-project conditions. Small objects contribute fewer pixels to the loss, so their representation can
+
+be weaker than large background regions. Boundary pixels are also difficult because small spatial errors can change
+
+labels along object edges.
+
+                                      Table 10. Error sources and likely causes.
+ Error type                               Likely cause                                Possible improvement
+
+                                          Few pixels and limited training             Class weighting, larger data, multi-scale
+ Small-object misses
+                                          examples                                    augmentation
+
+                                                                                      Boundary-aware loss or higher-
+ Boundary smoothing                       Resolution loss and interpolation effects
+                                                                                      resolution input
+
+ Noisy loss spikes                        Batch size 1 and difficult images           Larger batch or gradient accumulation
+
+                                          Limited class balance and palette           Standardized label mapping and per-
+ Class confusion
+                                          differences                                 class evaluation
+
+                                                                                      Implement official pixel accuracy and
+ Limited benchmark claims                 No full mIoU pipeline
+                                                                                      mIoU scripts
+
+
+
+
+                                                                   26
+
+
+================ PAGE 27 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+6.7 Overall Evaluation Summary
+
+         The evaluation supports a balanced conclusion. The project successfully implemented and trained FRRN-
+
+A, generated prediction masks, and produced visual evidence of pixel-level scene understanding. The model learned
+
+major regions and road-user groups in selected validation examples. The training graph shows noisy but recoverable
+
+behavior over 100 epochs. The proxy foreground/background analysis adds a limited quantitative check. However, a
+
+full benchmark evaluation remains future work. The report therefore presents the project as a strong implementation
+
+and analysis effort rather than a state-of-the-art accuracy claim.
+
+
+
+
+                                                                   27
+
+
+================ PAGE 28 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                 CHAPTER 7
+                        CONCLUSION AND FUTURE WORK
+
+7.1 Conclusion
+
+         In this project, I demonstrated a complete semantic segmentation workflow for autonomous driving scene
+
+understanding using FRRN-A. The project began with the motivation that self-driving vehicles need more than
+
+bounding boxes. They need pixel-level information about drivable road, vehicles, pedestrians, sidewalks, buildings,
+
+sky, and background. Semantic segmentation provides that dense scene representation.
+
+         I successfully adapted a legacy TensorFlow FRRN-A implementation, resolved compatibility issues,
+
+trained the model for 100 epochs, saved checkpoints, and generated prediction masks. The results show that the
+
+model learned meaningful urban scene structure, especially large regions and visible road-user groups. The work
+
+also identified limitations in small-object detection, boundary precision, and missing formal metrics.
+
+         The strongest contribution of my work is the full implementation pipeline. The project required dataset
+
+organization, environment setup, legacy-code adaptation, GPU training, checkpoint management, prediction
+
+generation, qualitative evaluation, and reproducibility documentation through GitHub and a project demo recording.
+
+These activities demonstrate a realistic machine learning engineering workflow.
+
+
+7.2 Future Work
+
+         Future work should address the evaluation gap and improve model robustness. The most important next
+
+step is a formal metric pipeline that calculates pixel accuracy, mean intersection-over-union, and per-class IoU on a
+
+standardized validation split. This would allow direct comparison with U-Net, FCN, SegNet, DeepLab, and newer
+
+transformer-based segmentation models.
+
+         Train on a larger and more diverse Cityscapes split to improve generalization.
+
+         Implement official quantitative metrics: pixel accuracy, mean IoU, per-class IoU, precision, and recall.
+
+         Compare FRRN-A against baselines such as U-Net, FCN, SegNet, and DeepLab under the same dataset
+
+split.
+
+         Use data augmentation, class weighting, and boundary-aware losses to improve small-object and edge
+
+segmentation.
+
+
+
+                                                                   28
+
+
+================ PAGE 29 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+            Extend prediction from still images to real-time driving video.
+
+            Optimize inference speed for deployment using model compression, lower-resolution inputs, or lightweight
+
+architectures.
+
+            Integrate segmentation maps with downstream planning and control modules in an autonomous driving
+
+pipeline.
+
+
+7.3 Real-World Transfer
+
+            In a real road-driving environment, the trained segmentation model would operate on live camera frames.
+
+Each frame would be converted into a pixel-level scene map that identifies road, sidewalk, vehicles, pedestrians, and
+
+background. The segmentation map could then support downstream planning and control. For example, road
+
+boundaries and obstacle regions could help a planner avoid unsafe regions. To reach that stage, the model would
+
+require larger-scale training, real-time optimization, extensive validation under different lighting and weather
+
+conditions, and integration with other sensors such as LiDAR or radar.
+
+            The current project is therefore a prototype-stage perception study. It proves that the FRRN-A pipeline can
+
+be adapted, trained, and used to generate segmentation masks. The future work turns this prototype into a more
+
+rigorous and deployable system.
+
+
+
+
+                                                                     29
+
+
+================ PAGE 30 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                                                REFERENCES
+
+          Abadi, M., Barham, P., Chen, J., Chen, Z., Davis, A., Dean, J., ... & Zheng, X. (2016). TensorFlow: A
+
+system for large-scale machine learning. Proceedings of the 12th USENIX Symposium on Operating Systems
+
+Design and Implementation.
+
+          Badrinarayanan, V., Kendall, A., & Cipolla, R. (2017). SegNet: A deep convolutional encoder-decoder
+
+architecture for image segmentation. IEEE Transactions on Pattern Analysis and Machine Intelligence, 39(12),
+
+2481-2495.
+
+          Chen, L. C., Zhu, Y., Papandreou, G., Schroff, F., & Adam, H. (2018). Encoder-decoder with atrous
+
+separable convolution for semantic image segmentation. Proceedings of the European Conference on Computer
+
+Vision.
+
+          Cordts, M., Omran, M., Ramos, S., Rehfeld, T., Enzweiler, M., Benenson, R., Franke, U., Roth, S., &
+
+Schiele, B. (2016). The Cityscapes dataset for semantic urban scene understanding. Proceedings of the IEEE
+
+Conference on Computer Vision and Pattern Recognition.
+
+          He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. Proceedings of
+
+the IEEE Conference on Computer Vision and Pattern Recognition.
+
+          Long, J., Shelhamer, E., & Darrell, T. (2015). Fully convolutional networks for semantic segmentation.
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition.
+
+          Pohlen, T., Hermans, A., Mathias, M., & Leibe, B. (2017). Full-resolution residual networks for semantic
+
+segmentation in street scenes. Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition.
+
+          Ronneberger, O., Fischer, P., & Brox, T. (2015). U-Net: Convolutional networks for biomedical image
+
+segmentation. Proceedings of the International Conference on Medical Image Computing and Computer-Assisted
+
+Intervention.
+
+          California State University, Dominguez Hills. (2019). Thesis and project guide. Graduate Studies Office.
+
+          GitHub Repository for this project. (2026). Teaching Autonomous Vehicles to See the Road: Pixel-Level
+
+Scene Understanding with FRRN-A. https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-
+
+Driving
+
+
+
+
+                                                                   30
+
+
+================ PAGE 31 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+            APPENDIX A. GITHUB REPOSITORY AND DEMO
+                           RECORDING
+
+         The complete project source code, README instructions, training scripts, FRRN-A model
+
+implementation, logs, prediction outputs, and supporting files are available in the public GitHub repository below.
+
+    GitHub Repository: https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-Driving
+         The project demonstration recording is available at the Google Drive link below. The recording shows the
+
+GitHub repository, Paperspace project environment, dataset folders, FRRN-A implementation, training script, result
+
+visuals, and conclusion.
+
+    Project Demo Recording: https://drive.google.com/file/d/1W5sv3qTNaZtnd3INmvQyWFEA0zLoet2B/view?
+    usp=sharing
+
+
+
+
+                                                                  31
+
+
+================ PAGE 32 of 41 ================
+
+                         Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+ APPENDIX B. REPOSITORY STRUCTURE AND EXECUTION
+                    COMMANDS
+
+         The repository is organized to separate source code, model files, results, and supporting documentation.
+
+The structure below is included for reproducibility.
+
+         FRRN-A-Semantic-Segmentation-Autonomous-Driving/
+
+          README.md
+
+          requirements.txt
+
+          run_project.sh
+
+          restore_env.sh
+
+          predict_demo.sh
+
+          predict_video.py
+
+          run_predict_video.sh
+
+          train_demo.sh
+
+          docker/
+
+           main.py
+
+           main_eval.py
+
+           main_predict.py
+
+           predict_frrna_custom.py
+
+           helpers.py
+
+           utils.py
+
+           models/
+
+            FRRN.py
+
+          results/
+
+           train_log.csv
+
+           val_log.csv
+
+           checkpoint_files_list.txt
+
+           prediction_masks/
+
+
+
+                                                                    32
+
+
+================ PAGE 33 of 41 ================
+
+                Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+Primary execution commands documented in the README are shown below.
+
+cd /notebooks
+
+./restore_env.sh
+
+
+cd /notebooks
+
+./run_project.sh
+
+
+cd /notebooks/docker
+
+python3 predict_frrna_custom.py
+
+
+
+
+                                                           33
+
+
+================ PAGE 34 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+         APPENDIX C. ADDITIONAL RESULTS AND VISUAL
+                          EVIDENCE
+
+        The figures below provide additional visual evidence of prediction-mask generation. They supplement the
+
+main evaluation chapter rather than repeating the main argument.
+
+
+
+
+  Figure 7. Standalone FRRN-A prediction mask showing vehicle-like and pedestrian-like regions in a validation
+                                                 example.
+
+
+
+
+  Figure 8. Standalone FRRN-A prediction mask showing pedestrian and object regions in a validation example.
+
+
+
+
+                                                                  34
+
+
+================ PAGE 35 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+Figure 9. Comparison example with sparse small-object regions, illustrating the difficulty of distant pedestrian and
+                                          boundary segmentation.
+
+
+
+
+                                                                  35
+
+
+================ PAGE 36 of 41 ================
+
+                       Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                  APPENDIX D. ENGINEERING NOTES AND
+                    REPRODUCIBILITY LIMITATIONS
+
+         This appendix documents engineering notes that support reproducibility but are too detailed for the main
+
+report. The original project code used older TensorFlow patterns. Compatibility work was required before training
+
+could run. The most important fixes included TensorFlow compatibility mode, tf_slim replacement, and batch-
+
+normalization adjustments. These changes are visible in the repository code.
+
+         Large datasets and full checkpoint binary files were not included in the GitHub repository to keep the
+
+repository manageable. Instead, the repository includes scripts, logs, prediction outputs, and a checkpoint file list.
+
+The report and demo recording document the checkpoint generation and prediction process. Future reproducibility
+
+improvements would include a small sample dataset, a Dockerfile, and a standardized metric script for pixel
+
+accuracy and mIoU.
+
+         The quantitative proxy analysis in Chapter 6 is included to strengthen the evaluation but should not be
+
+confused with official semantic segmentation benchmarks. Official metrics require standardized label IDs,
+
+consistent class mappings, and evaluation over the full validation split. The proxy analysis compares
+
+foreground/background agreement on the visualized color panels only.
+
+
+
+
+                                                                  36
+
+
+================ PAGE 37 of 41 ================
+
+                        Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+        APPENDIX E. QUANTITATIVE EVALUATION NOTES
+
+         This appendix explains how the limited proxy quantitative analysis in Chapter 6 was produced and how
+
+future official metrics should be implemented. It is included to make the evaluation transparent rather than to
+
+overclaim benchmark performance.
+
+         For the proxy analysis, each visual comparison figure was divided into the ground-truth panel and the
+
+prediction panel. The dominant color in each panel was treated as background. All other colors were treated as
+
+foreground. This produced binary masks for foreground/background comparison. The proxy foreground IoU was
+
+calculated as the intersection of foreground pixels divided by the union of foreground pixels. Binary pixel agreement
+
+was calculated as the percentage of pixels where the collapsed foreground/background labels matched.
+
+         # Conceptual proxy metric pseudocode
+
+         load comparison image
+
+         crop ground_truth_panel and prediction_panel
+
+         remove title/header region
+
+         for each panel:
+
+            find dominant RGB color
+
+            background = pixels close to dominant color
+
+            foreground = all other pixels
+
+         proxy_iou = foreground_intersection / foreground_union
+
+         binary_agreement = matching_foreground_background_pixels / total_pixels
+
+         The proxy metric was useful because the reporting pipeline saved colorized masks rather than official label-
+
+ID tensors for every validation image. It gives a simple numerical check of broad region alignment in the visual
+
+examples. It should not be reported as official semantic segmentation accuracy.
+
+         For future work, the prediction script should save raw integer label maps in addition to colorized images.
+
+The evaluation script should then compare predicted label IDs with ground-truth label IDs using the same class
+
+mapping. This would make it possible to calculate pixel accuracy, mean IoU, per-class IoU, frequency-weighted
+
+IoU, precision, and recall on the validation set.
+
+
+
+
+                                                                   37
+
+
+================ PAGE 38 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+                            Table 11. Recommended official metrics for future evaluation.
+ Metric                                     Definition                                  Why it matters
+
+ Pixel accuracy                             Percentage of correctly labeled pixels      Basic validation-set correctness
+
+                                            Mean intersection-over-union across         Standard segmentation benchmark
+ Mean IoU
+                                            classes                                     metric
+
+ Per-class IoU                              IoU for each individual class               Shows which classes fail or succeed
+
+ Frequency-weighted IoU                     IoU weighted by class frequency             Accounts for large class dominance
+
+ Precision/Recall                           Class-specific detection quality            Useful for pedestrians and vehicles
+
+
+
+          The most important improvement for a future version of this project is to preserve both the prediction
+
+output and ground-truth labels as integer class maps. Colorized images are useful for visual communication, but raw
+
+class labels are required for rigorous automated evaluation. This distinction explains why the report uses a proxy
+
+quantitative analysis rather than claiming official benchmark results.
+
+          A production-quality evaluation script would iterate over every validation image, load the predicted label
+
+map and the ground-truth label map, ignore void labels, and then accumulate a confusion matrix. Pixel accuracy and
+
+IoU values would be calculated from that matrix. That future extension would directly address the evaluation gap
+
+identified during review.
+
+
+
+
+                                                                     38
+
+
+================ PAGE 39 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+              APPENDIX F. DEMO RECORDING OUTLINE AND
+                       SUBMISSION CHECKLIST
+
+           The project demonstration recording was designed to show the working artifacts rather than repeat the
+
+presentation. It includes the GitHub repository, Paperspace environment, dataset folders, FRRN-A model code,
+
+training configuration, prediction outputs, and conclusion. This appendix documents the recording structure and
+
+final submission checklist.
+
+                                            Table 12. Screen recording outline.
+ Segment                                    Approximate time                            Content shown
+
+ Introduction                               0:00-0:30                                   Project title and goal
+
+ GitHub repository                          0:30-1:10                                   README, code files, results folder
+
+ Paperspace environment                     1:10-1:50                                   Project folders and dataset structure
+
+                                                                                        FRRN.py, residual units, full-resolution
+ Model code                                 1:50-2:40
+                                                                                        residual units
+
+                                                                                        run_project.sh, 100 epochs, batch size 1,
+ Training setup                             2:40-3:30
+                                                                                        crop size
+
+ Results                                    3:30-4:30                                   Prediction masks and qualitative outputs
+
+ Conclusion                                 4:30-5:00                                   Future work and real-world transfer
+
+
+
+           Final submission checklist: GitHub repository is public; README includes execution instructions; results
+
+images are included; demo recording link is shared with viewer access; final report includes motivation, related
+
+work, dataset, implementation, evaluation, conclusion, references, and appendices; grammar and formatting have
+
+been reviewed.
+
+
+
+
+                                                                     39
+
+
+================ PAGE 40 of 41 ================
+
+                         Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+   APPENDIX G. REPRODUCIBILITY AUDIT AND ARTIFACT
+                     CHECKLIST
+
+         This appendix provides a practical reproducibility audit for the submitted project artifacts. The purpose is
+
+not to repeat the implementation chapter, but to document how a grader or future reader can verify that the
+
+repository, demonstration video, and report are connected to the same FRRN-A semantic segmentation experiment.
+
+This is useful because machine learning projects often involve multiple environments, generated outputs, and large
+
+intermediate files that are difficult to include directly in a small public repository.
+
+         The first reproducibility checkpoint is the GitHub repository. The repository should show the README
+
+file at the top level, along with the training scripts, prediction script, docker source folder, model folder, and results
+
+folder. The README summarizes the project objective, dataset, model, training configuration, limitations, and
+
+execution commands. The file docker/models/FRRN.py is the main architecture file and should contain the FRRN-A
+
+model definition, including residual units and full-resolution residual units. The run_project.sh file documents the
+
+training configuration, including the FRRN-A model selection, 320 x 640 crop size, batch size 1, 100 epochs, and
+
+Cityscapes/Darmstadt dataset path.
+
+         The second reproducibility checkpoint is the results folder. The repository includes prediction masks and
+
+logs that demonstrate the model reached the output-generation stage. The prediction masks are colorized visual
+
+outputs, not raw label-ID tensors. For that reason, they are appropriate for qualitative analysis and broad
+
+visualization, but they should not be treated as official benchmark outputs. The checkpoint file list provides
+
+evidence that training saved model artifacts while avoiding the need to upload large binary checkpoint files into the
+
+repository.
+
+         The third reproducibility checkpoint is the five-minute demonstration video. The video shows the GitHub
+
+repository, Paperspace environment, training script, FRRN-A model code, and generated prediction outputs. This
+
+makes the submission more verifiable because the report does not only describe the work; the recording shows the
+
+actual project files and outputs being navigated. The video also confirms that the report, slides, repository, and
+
+prediction results are part of the same project workflow.
+
+         A future student or researcher who wants to reproduce the project should begin by reviewing the README
+
+and verifying that the expected folder structure exists. The dataset folders should contain image-mask pairs for
+
+
+
+
+                                                                    40
+
+
+================ PAGE 41 of 41 ================
+
+                          Teaching Autonomous Vehicles to See the Road: Pixel-Level Scene Understanding with FRRN-A
+
+
+
+
+training and validation. The training script should be run only after the environment is restored and dependencies are
+
+available. Since the project involved TensorFlow compatibility work, the exact environment matters. If a different
+
+Python or TensorFlow version is used, similar compatibility issues may occur again. This is why the report
+
+documents tf_slim replacement, compatibility mode, batch normalization adjustments, and the use of a Paperspace
+
+GPU environment.
+
+                        Table 13. Final artifact verification checklist for the submitted project.
+Artifact                                   Verification purpose                        Expected evidence
+GitHub repository                          Confirm that source code and                README, scripts, docker folder,
+                                           README are publicly available               model file, and results folder are visible
+FRRN-A model code                          Verify     the    technical   model         docker/models/FRRN.py             includes
+                                           implementation                              residual and full-resolution residual
+                                                                                       components
+Training script                            Verify the experiment configuration         run_project.sh shows FRRN-A, 100
+                                                                                       epochs, batch size 1, and 320 x 640
+                                                                                       crops
+Prediction outputs                         Confirm that the trained pipeline           results/prediction_masks          contains
+                                           generated visual results                    generated PNG outputs
+Training logs and checkpoint list          Support      reproducibility    without     train_log.csv                          and
+                                           uploading large checkpoint binaries         checkpoint_files_list.txt are included
+Demo recording                             Confirm that the project workflow was       Recording         shows        repository,
+                                           executed and documented                     Paperspace files, code, scripts, and
+                                                                                       results
+          The artifact checklist also clarifies the boundary between what was completed and what remains future
+
+work. Completed artifacts include the working training script, adapted FRRN-A model code, prediction output
+
+images, GitHub repository, and demonstration recording. Future artifacts would include raw predicted label maps
+
+for every validation image, a full confusion matrix, official pixel accuracy, class IoU, mean IoU, and baseline
+
+comparisons against U-Net, FCN, SegNet, and DeepLab. This separation is important because the project should be
+
+evaluated honestly: the completed work demonstrates a full engineering and qualitative evaluation pipeline, while
+
+the official quantitative benchmarking remains an identified next step.
+
+          This final audit supports the main claim of the report. My project successfully demonstrates a complete
+
+FRRN-A semantic segmentation workflow under course-project constraints. The work includes environment setup,
+
+compatibility fixes, GPU training, checkpoint generation, prediction-mask visualization, GitHub packaging, and a
+
+recorded walkthrough. It does not claim to be a production-ready autonomous-driving perception system or an
+
+official Cityscapes benchmark submission. Instead, it provides a clear, reproducible foundation for extending the
+
+project into a more rigorous evaluation and deployment study.
+
+
+
+
+                                                                     41
