@@ -1,0 +1,144 @@
+TRANSCRIPT OF ORIGINAL AUTHOR'S CSC 590 PRESENTATION (2026)
+This is a searchable text extraction of the 8-slide presentation dated May 13, 2026. Embedded slide figures are not reproduced, and source slide layout is not preserved. For exact images and layout, consult the original presentation.
+
+
+
+================ SLIDE 1 of 8 ================
+
+      Pixel-Level Urban Scene Understanding for Autonomous Driving
+      Using FRRN-A Semantic Segmentation
+
+
+
+
+               DATE : 05/13/2026
+
+
+
+
+C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 2 of 8 ================
+
+Autonomous driving needs pixel-level scene                                       ❑ Self-driving cars need to understand the full
+understanding, not just object boxes. A self                                       road scene.
+driving car needs to know exactly which pixels
+are road, sidewalk, vehicle, pedestrian and                                      ❑ Object detection gives boxes, but boxes do
+background, not just where objects are.                                            not show exact road boundaries.
+
+                                                                                 ❑ Semantic segmentation classifies every
+                                                                                   pixel. This helps identify road, sidewalk,
+                                                                                   vehicle, pedestrian, building, sky, and
+                                                                                   obstacles.
+Dataset : Cityscapes/Darmstadt urban driving
+scenes with pixel level ground truth masks.
+                                                                                 ❑ Project goal: train FRRN-A for pixel-level
+                                                                                   urban scene understanding.
+
+ C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 3 of 8 ================
+
+Semantic Segmentation Overview
+From Object Detection to Pixel-Level Understanding
+Autonomous vehicles need more than object boxes. They need to understand what every pixel
+represents in the driving scene. My Project uses semantic segmentation because autonomous driving
+needs dense pixel-level scene understanding.
+
+
+
+
+ C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 4 of 8 ================
+
+     FRRN-A Technique
+What makes FRRN-A unique?
+
+It preserves full-resolution spatial
+detail while also learning deep
+scene context. It is useful for
+preserving object boundaries.
+In this project, FRRN-A classifies
+each pixel into a scene category.
+• Full resolution stream keeps
+    road/object boundaries
+    sharper.
+• Pooling streams learns overall
+    scene context.
+• Residual connections support
+    stable deep training.
+
+ C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 5 of 8 ================
+
+From Legacy Code to Trained FRRN-A Model
+
+
+                                                                                Dataset: Cityscape/Darmstadt
+                                                                                Input: 320 X 640 crops
+                                                                                Batch size: 1
+                                                                                Training: 100 epochs
+                                                                                Model: FRRN-A, ~17.7M Parameters
+                                                                                Output: Saved Checkpoints + prediction masks
+
+                                                                                100 Epochs was chosen as a practical
+                                                                                balance between visible learning,
+                                                                                convergence, dataset size and available
+                                                                                GPU time.
+
+
+
+
+C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 6 of 8 ================
+
+    Results & Evaluation
+
+                                                                                                    Input image     Ground Truth     FRRN-A prediction
+
+                                                                        Loss spike note: Small
+                                                                        Dataset + batch size 1
+                                                                        caused noisy spikes on
+                                                                        difficult images; the
+                                                                        model recovered, and the
+                                                                        overall trend decreased
+
+
+
+
+                                                                                                   Compared with object detection, this output
+                                                                                                   gives a dense pixel-level scene map instead of
+                                                                                                   only bounding boxes.
+
+C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 7 of 8 ================
+
+    Conclusion and Future Work
+
+
+                                                                                Real World transfer:
+                                                                                apply the trained model
+                                                                                to live camera/video
+                                                                                frames and integrate
+                                                                                segmentation maps with
+                                                                                planning/control systems.
+
+
+
+
+C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
+
+
+================ SLIDE 8 of 8 ================
+
+C AL I F O R N I A S T AT E U N I V E R S I T Y , D O M I N G U E Z H I L L S
