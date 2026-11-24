@@ -4,6 +4,10 @@
 **Kumar Abhinav** · M.S. Computer Science, California State University, Dominguez Hills  
 **CSC 590 instructor:** Dr. Bin Tang
 
+![Reconstruction smoke test](https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-Driving/actions/workflows/reconstruction-ci.yml/badge.svg)
+
+**Recruiter-friendly overview:** [What I built, verified results, and what the archive can reproduce](docs/RECRUITER_ENGINEERING_BRIEF.md) · **Personal portfolio:** [kumarabhinavtech.com](https://kumarabhinavtech.com)
+
 > **The May 2026 project was completed, submitted, presented and graded—not abandoned.** I executed the final FRRN-A semantic segmentation experiment on a **paid Paperspace Gradient GPU**, trained for 100 epochs, generated checkpoints and prediction masks, and submitted a **41-page final report** and **8-slide presentation**. I earned an **A in CSC 590**, and report receiving the **highest score in the class**. The paid Paperspace workspace is no longer accessible; the missing historical code/weights are an **archival gap**, not evidence that the project was unfinished.
 
 [**Read the 41-page report (searchable text)**](docs/CSC590_FINAL_REPORT_SEARCHABLE_TRANSCRIPT.txt) · [**Read the 8-slide presentation (searchable text)**](docs/CSC590_FINAL_PRESENTATION_SEARCHABLE_TRANSCRIPT.txt) · [**Academic timeline and evidence**](docs/PROJECT_HISTORY_AND_EVIDENCE.md) · [**Reproducibility status**](docs/REPRODUCIBILITY_STATUS.md) · [**Runnable independent reconstruction**](reconstruction/README.md) · [**Original demo recording**](https://drive.google.com/file/d/1W5sv3qTNaZtnd3INmvQyWFEA0zLoet2B/view)
