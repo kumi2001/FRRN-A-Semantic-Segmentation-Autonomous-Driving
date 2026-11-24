@@ -1,16 +1,32 @@
-# Teaching Autonomous Vehicles to See the Road
-### Completed graduate research: CSC 599 (Spring 2025) → CSC 590 (Spring 2026)
+# FRRN-A Urban Scene Semantic Segmentation
 
-**Kumar Abhinav** · M.S. Computer Science, California State University, Dominguez Hills  
-**CSC 590 instructor:** Dr. Bin Tang
+**Graduate computer vision project (CSC 590, Spring 2026) | CSUDH | Kumar Abhinav**
 
-![Reconstruction smoke test](https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-Driving/actions/workflows/reconstruction-ci.yml/badge.svg)
+Adapted legacy TensorFlow FRRN-A research code to a newer GPU runtime and trained a semantic-segmentation network on urban driving images. The completed project produced checkpoints, a training-loss trace, and qualitative road-scene prediction masks. It extended my earlier CSC 599 LiDAR/autonomous-perception research direction and received an **A** in CSC 590.
 
-**Recruiter-friendly overview:** [What I built, verified results, and what the archive can reproduce](docs/RECRUITER_ENGINEERING_BRIEF.md) · **Personal portfolio:** [kumarabhinavtech.com](https://kumarabhinavtech.com)
+| Project result | Historical CSC 590 experiment |
+| --- | --- |
+| **Model and runtime** | FRRN-A (17.7M parameters); paid Paperspace Gradient GPU |
+| **Training** | 100 epochs; 85 training + 15 validation image/mask pairs; 320 × 640 crops |
+| **Deliverables** | Checkpoints, prediction masks, 41-page final report, eight-slide presentation and demo |
+| **Evaluation** | Qualitative input/ground-truth/prediction comparisons; **no official mIoU reported** |
 
-> **The May 2026 project was completed, submitted, presented and graded—not abandoned.** I executed the final FRRN-A semantic segmentation experiment on a **paid Paperspace Gradient GPU**, trained for 100 epochs, generated checkpoints and prediction masks, and submitted a **41-page final report** and **8-slide presentation**. I earned an **A in CSC 590**, and report receiving the **highest score in the class**. The paid Paperspace workspace is no longer accessible; the missing historical code/weights are an **archival gap**, not evidence that the project was unfinished.
+[**Project engineering brief**](docs/RECRUITER_ENGINEERING_BRIEF.md) · [Report transcript](docs/CSC590_FINAL_REPORT_SEARCHABLE_TRANSCRIPT.txt) · [Presentation transcript](docs/CSC590_FINAL_PRESENTATION_SEARCHABLE_TRANSCRIPT.txt) · [Original demo](https://drive.google.com/file/d/1W5sv3qTNaZtnd3INmvQyWFEA0zLoet2B/view) · [Portfolio](https://kumarabhinavtech.com)
 
-[**Read the 41-page report (searchable text)**](docs/CSC590_FINAL_REPORT_SEARCHABLE_TRANSCRIPT.txt) · [**Read the 8-slide presentation (searchable text)**](docs/CSC590_FINAL_PRESENTATION_SEARCHABLE_TRANSCRIPT.txt) · [**Academic timeline and evidence**](docs/PROJECT_HISTORY_AND_EVIDENCE.md) · [**Reproducibility status**](docs/REPRODUCIBILITY_STATUS.md) · [**Runnable independent reconstruction**](reconstruction/README.md) · [**Original demo recording**](https://drive.google.com/file/d/1W5sv3qTNaZtnd3INmvQyWFEA0zLoet2B/view)
+## Reproduce a new FRRN-style demonstration
+
+The **independent PyTorch reconstruction** includes an example dataset generator, training, checkpoint loading, inference, and automated tests. It is deliberately separate from the original 2026 TensorFlow experiment.
+
+```bash
+git clone https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-Driving.git
+cd FRRN-A-Semantic-Segmentation-Autonomous-Driving/reconstruction
+python -m pip install -r requirements.txt
+bash run_smoke.sh
+```
+
+[Reconstruction source and instructions](reconstruction/README.md) · [CI test results](https://github.com/kumi2001/FRRN-A-Semantic-Segmentation-Autonomous-Driving/actions/workflows/reconstruction-ci.yml) · [Historical artifact status](docs/REPRODUCIBILITY_STATUS.md)
+
+> **Historical archive note:** Original TensorFlow source, checkpoint weights, and dataset splits were in a paid Paperspace workspace that is no longer accessible. The 2026 coursework was completed and assessed, but its exact training run cannot be rerun from this archive. The newer PyTorch demo is **not** represented as recovered historical code or as a Cityscapes benchmark result.
 
 ## CSC 599 → CSC 590: the complete research story
 
